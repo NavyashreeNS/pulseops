@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Relational SQL Database (ACID Core)
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulseops-postgres
+    environment:
+      POSTGRES_DB: pulseops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pulseops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # NoSQL Document Store (Audit Trail & Dynamic Telemetry)
+  mongodb:
+    image: mongo:7.0
+    container_name: pulseops-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # Spring Boot Java Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile_inline: |
+        FROM eclipse-temurin:17-jdk-alpine AS build
+        WORKDIR /app
+        COPY . .
+        RUN chmod +x ./mvnw && ./mvnw clean package -DskipTests
+
+        FROM eclipse-temurin:17-jre-alpine
+        WORKDIR /app
+        COPY --from=build /app/target/*.jar app.jar
+        EXPOSE 8080
+        ENTRYPOINT ["java", "-jar", "app.jar", "--spring.profiles.active=postgres"]
+    container_name: pulseops-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: pulseops
+      DB_USER: postgres
+      DB_PASSWORD: postgrespassword
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_DB: pulseops
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+
+  # React + Vite Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile_inline: |
+        FROM node:20-alpine AS build
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm install
+        COPY . .
+        RUN npm run build
+
+        FROM nginx:alpine
+        COPY --from=build /app/dist /usr/share/nginx/html
+        EXPOSE 80
+        CMD ["nginx", "-g", "daemon off;"]
+    container_name: pulseops-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  mongo_data:

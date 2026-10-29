@@ -1,0 +1,30 @@
+# Node / Frontend
+**/node_modules/
+**/dist/
+**/build/
+.oxlintcache
+*.local
+
+# Java / Backend
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# IDE & OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Database / Local temp files
+*.db
+*.h2.db
